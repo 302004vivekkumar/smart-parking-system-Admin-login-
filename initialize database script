@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""
+Database initialization script for ParkEase application
+Run this script to create the database tables and add sample data
+"""
+
+import os
+import sys
+from datetime import datetime, timedelta
+from werkzeug.security import generate_password_hash
+
+# Add the parent directory to Python path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from app import app, db, User, ParkingSlot, Booking, Payment
+
+def init_database():
+    """Initialize the database with tables and sample data"""
+    with app.app_context():
+        print("Creating database tables...")
+        db.create_all()
+        
+        # Check if data already exists
+        if User.query.first():
+            print("Database already contains data. Skipping initialization.")
+            return
+        
+        print("Adding sample users...")
+        # Create sample users
+        users_data = [
+            {'username': 'admin', 'password': 'admin123'},
+            {'username': 'john_doe', 'password': 'password123'},
+            {'username': 'jane_smith', 'password': 'password123'},
+        ]
+        
+        users = []
+        for user_data in users_data:
+            user = User(
+                username=user_data['username'],
+                password_hash=generate_password_hash(user_data['password'])
+            )
+            db.session.add(user)
+            users.append(user)
+        
+        db.session.commit()
+        print(f"Created {len(users)} users")
+        
+        print("Adding sample parking slots...")
+        # Create sample parking slots
+        slots_data = [
+            {'name': 'Premium Slot A1', 'location': 'Downtown Mall - Level 1', 'price': 25.0, 'owner': users[0]},
+            {'name': 'Standard Slot B2', 'location': 'City Center Plaza', 'price': 15.0, 'owner': users[0]},
+            {'name': 'Economy Slot C3', 'location': 'Metro Station North', 'price': 10.0, 'owner': users[1]},
+            {'name': 'VIP Slot D1', 'location': 'Airport Terminal 1', 'price': 30.0, 'owner': users[1]},
+            {'name': 'Regular Slot E2', 'location': 'Shopping District', 'price': 12.0, 'owner': users[2]},
+            {'name': 'Covered Slot F3', 'location': 'Business Complex', 'price': 18.0, 'owner': users[2]},
+        ]
+        
+        slots = []
+        for slot_data in slots_data:
+            slot = ParkingSlot(
+                name=slot_data['name'],
+                location=slot_data['location'],
+                price_per_hour=slot_data['price'],
+                owner_id=slot_data['owner'].id
+            )
+            db.session.add(slot)
+            slots.append(slot)
+        
+        db.session.commit()
+        print(f"Created {len(slots)} parking slots")
+        
+        print("Adding sample bookings and payments...")
+        # Create sample bookings and payments
+        bookings_data = [
+            {
+                'slot': slots[0],
+                'user_name': 'Alice Johnson',
+                'duration': 2.5,
+                'days_ago': 5
+            },
+            {
+                'slot': slots[1],
+                'user_name': 'Bob Wilson',
+                'duration': 4.0,
+                'days_ago': 3
+            },
+            {
+                'slot': slots[2],
+                'user_name': 'Carol Brown',
+                'duration': 1.5,
+                'days_ago': 1
+            },
+            {
+                'slot': slots[3],
+                'user_name': 'David Lee',
+                'duration': 3.0,
+                'days_ago': 7
+            },
+        ]
+        
+        for booking_data in bookings_data:
+            slot = booking_data['slot']
+            duration = booking_data['duration']
+            booking_time = datetime.utcnow() - timedelta(days=booking_data['days_ago'])
+            
+            booking = Booking(
+                slot_id=slot.id,
+                user_id=slot.owner_id,
+                user_name=booking_data['user_name'],
+                booking_time=booking_time,
+                start_time=booking_time,
+                end_time=booking_time + timedelta(hours=duration),
+                duration_hours=duration,
+                total_amount=slot.price_per_hour * duration,
+                status='Completed'
+            )
+            db.session.add(booking)
+            db.session.commit()  # Commit to get booking.id
+            
+            # Create corresponding payment
+            payment = Payment(
+                booking_id=booking.id,
+                amount=booking.total_amount,
+                payment_time=booking_time + timedelta(minutes=5),
+                payment_method='Credit Card',
+                status='Completed'
+            )
+            db.session.add(payment)
+        
+        db.session.commit()
+        print(f"Created {len(bookings_data)} bookings with payments")
+        
+        print("\nDatabase initialization completed successfully!")
+        print("\nSample login credentials:")
+        print("Username: admin, Password: admin123")
+        print("Username: john_doe, Password: password123")
+        print("Username: jane_smith, Password: password123")
+
+def reset_database():
+    """Reset the database by dropping all tables and recreating them"""
+    with app.app_context():
+        print("Resetting database...")
+        db.drop_all()
+        init_database()
+
+if __name__ == '__main__':
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Database management for ParkEase')
+    parser.add_argument('--reset', action='store_true', help='Reset the database (drops all data)')
+    
+    args = parser.parse_args()
+    
+    if args.reset:
+        reset_database()
+    else:
+        init_database()
